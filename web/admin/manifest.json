@@ -1,0 +1,23 @@
+{
+  "name": "La Eskina del Sabor",
+  "short_name": "La Eskina",
+  "description": "Panel administrativo de La Eskina del Sabor.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "background_color": "#dbbe7e",
+  "theme_color": "#0c0705",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "../../LOGO/logo.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg"
+    },
+    {
+      "src": "../../LOGO/logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}

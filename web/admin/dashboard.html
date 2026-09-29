@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Administrador - La Eskina del Sabor</title>
+    <link rel="icon" type="image/jpeg" href="../../LOGO/logo.jpg">
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/responsive.css">
+    <link rel="stylesheet" href="css/admin-style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Leaflet para mapas -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+</head>
+<body>
+    <!-- Admin Navbar -->
+    <nav class="admin-navbar">
+        <div class="container">
+            <div class="admin-logo">
+                <i class="fas fa-tachometer-alt"></i>
+                <span>Panel Administrador</span>
+            </div>
+            <div class="admin-hamburger" id="adminHamburger" style="cursor: pointer; font-size: 1.5rem;">
+                <i class="fas fa-bars"></i>
+            </div>
+            <div class="admin-user">
+                <span id="adminUserEmail">Admin</span>
+                <button id="logoutBtn" class="btn-danger">Cerrar Sesión</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Admin Container -->
+    <div class="admin-container">
+        <!-- Sidebar -->
+        <aside class="admin-sidebar">
+            <ul class="admin-menu">
+                <li><a href="#" class="menu-item active" data-section="dashboard"><i class="fas fa-chart-line"></i> Dashboard</a></li>
+                <li><a href="#" class="menu-item" data-section="productos"><i class="fas fa-utensils"></i> Productos</a></li>
+                <li><a href="#" class="menu-item" data-section="ordenes_tienda"><i class="fas fa-store"></i> Órdenes en tienda</a></li>
+                <li><a href="#" class="menu-item" data-section="pedidos"><i class="fas fa-box"></i> Pedidos</a></li>
+                <li><a href="#" class="menu-item" data-section="menus"><i class="fas fa-file"></i> Menús</a></li>
+                <li><a href="#" class="menu-item" data-section="galeria"><i class="fas fa-images"></i> Galería</a></li>
+                <li><a href="#" class="menu-item" data-section="configuracion"><i class="fas fa-cog"></i> Configuración</a></li>
+                <li><a href="#" class="menu-item" data-section="comentarios"><i class="fas fa-comments"></i> Comentarios</a></li>
+            </ul>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="admin-main">
+            <!-- Dashboard Section -->
+            <section id="dashboard" class="admin-section active">
+                <h2>Dashboard</h2>
+                <div id="loadingMessage" style="text-align: center; padding: 2rem; color: #934b14;">Cargando datos...</div>
+                <div class="dashboard-stats" id="dashboardStats"></div>
+                <div class="dashboard-recent" id="dashboardRecent"></div>
+            </section>
+
+            <!-- Productos Section -->
+            <section id="productos" class="admin-section">
+                <div class="admin-header">
+                    <h2>Gestión de Productos</h2>
+                    <div style="display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
+                        <button class="btn-primary" id="btnAgregarProducto">+ Agregar Producto</button>
+                        <button class="btn-secondary" id="btnCargarPizzasPredeterminadas" type="button">Cargar productos del menú</button>
+                        <!-- <button class="btn-secondary" id="btnCargaMasivaProductos" type="button">Cargar productos del menú</button> -->
+                        <input id="buscarProductoAdmin" type="text" placeholder="Buscar producto..." style="padding:0.75rem 1rem; border-radius:10px; border:1px solid #ddd; min-width:240px; flex:1;" />
+                    </div>
+                </div>
+                
+                <div id="formProductoContainer" style="display: none; background: white; padding: 2rem; border-radius: 10px; margin-bottom: 2rem;">
+                    <h3>Nuevo Producto</h3>
+                    <form id="formProducto">
+                        <div class="form-group">
+                            <label>Nombre del Producto</label>
+                            <input type="text" id="nombreProducto" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Categoría</label>
+                            <select id="categoriaProducto" required>
+                                <option value="">Selecciona una categoría</option>
+                                <option value="comidas">Comidas</option>
+                                <option value="bebidas">Bebidas</option>
+                                <option value="postres">Postres</option>
+                                <option value="licuados">Licuados</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Precio ($)</label>
+                            <input type="number" id="precioProducto" step="0.01" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Ingredientes</label>
+                            <textarea id="ingredientesProducto" rows="3"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Stock</label>
+                            <input type="number" id="stockProducto" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Imagen</label>
+                            <input type="file" id="imagenProducto" accept="image/*">
+                            <small>La imagen se convertirá a texto y se guardará en la BD</small>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary">Guardar Producto</button>
+                            <button type="button" class="btn-danger" id="btnCancelarProducto">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="listaProductos" class="productos-admin-list"></div>
+            </section>
+
+            <!-- ============================================ -->
+            <!-- ÓRDENES EN TIENDA (NUEVO)                    -->
+            <!-- ============================================ -->
+            <section id="ordenes_tienda" class="admin-section">
+                <div class="admin-header">
+                    <h2>Órdenes en tienda</h2>
+                    <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+                        <button class="btn-secondary" id="btnAbrirCaja" type="button"><i class="fas fa-cash-register"></i> Abrir Caja</button>
+                        <button class="btn-secondary" id="btnReporteVentas" type="button"><i class="fas fa-chart-bar"></i> Reporte</button>
+                        <button class="btn-secondary" id="btnVerOrdenesTienda" type="button"><i class="fas fa-store"></i> Ver Órdenes</button>
+                        <button class="btn-secondary" id="btnVerHistorialCajas" type="button"><i class="fas fa-history"></i> Ver historial de cajas</button>
+                        <button class="btn-primary" id="btnNuevaOrdenTienda" type="button">+ Nueva orden</button>
+                    </div>
+                </div>
+                <div id="cajaStatusBar" style="display:none; margin-bottom:1rem;"></div>
+                <p style="margin-bottom: 1rem; color: #5f6368;">Selecciona los productos, registra al cliente y la mesa, y genera el ticket térmico al finalizar.</p>
+
+                <div class="card" style="padding: 1rem; margin-bottom: 1rem; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.08);">
+                    <div style="display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); align-items: end;">
+                        <div class="form-group">
+                            <label>Nombre del cliente <span style="color:#999; font-size:0.85rem;">(opcional)</span></label>
+                            <input type="text" id="nombreOrdenTienda" placeholder="Ej. Juan Pérez">
+                        </div>
+                        <div class="form-group">
+                            <label>Número de teléfono <span style="color:#999; font-size:0.85rem;">(opcional)</span></label>
+                            <input type="tel" id="telefonoOrdenTienda" placeholder="Ej. 9341154258">
+                        </div>
+                        <div class="form-group">
+                            <label>Tipo de pago <span style="color:red;">*</span></label>
+                            <select id="tipoPagoOrdenTienda" required>
+                                <option value="efectivo">Efectivo</option>
+                                <option value="transferencia">Transferencia</option>
+                                <option value="tarjeta">Tarjeta</option>
+                                <option value="pendiente">Pendiente</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Número de mesa <span style="color:#999; font-size:0.85rem;">(opcional)</span></label>
+                            <input type="text" id="mesaOrdenTienda" placeholder="Ej. Mesa 5">
+                        </div>
+                        <div class="form-group">
+                            <label>Dirección <span style="color:#999; font-size:0.85rem;">(opcional)</span></label>
+                            <input type="text" id="direccionOrdenTienda" placeholder="Ej. Calle Principal 123">
+                        </div>
+                        <div class="form-group">
+                            <label>Repartidor <span style="color:#999; font-size:0.85rem;">(opcional)</span></label>
+                            <input type="text" id="repartidorOrdenTienda" placeholder="Nombre del repartidor">
+                        </div>
+                        <div class="form-group">
+                            <label>Detalles adicionales <span style="color:#999; font-size:0.85rem;">(opcional)</span></label>
+                            <input type="text" id="detallesOrdenTienda" placeholder="Notas extra, alergias, preferencias...">
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: grid; gap: 1rem; grid-template-columns: 1.2fr 0.8fr; align-items: start;">
+                    <div class="card" style="padding: 1rem; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.08);">
+                        <h3 style="margin-bottom: 0.75rem;">Productos disponibles</h3>
+                        <div style="margin-bottom:0.75rem;">
+                            <input id="buscarProductoOrdenTienda" type="text" placeholder="Buscar producto..." style="width:100%; padding:0.75rem 1rem; border-radius:10px; border:1px solid #ddd;" />
+                        </div>
+                        <div id="listaProductosTienda" class="productos-admin-list"></div>
+                    </div>
+
+                    <div class="card" style="padding: 1rem; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); position: sticky; top: 1rem;">
+                        <h3 style="margin-bottom: 0.75rem;">Resumen de la orden</h3>
+                        <div id="resumenOrdenTienda" style="display: grid; gap: 0.75rem;"></div>
+                        <div style="border-top: 1px solid #eee; padding-top: 0.75rem; margin-top: 0.75rem; font-weight: 700; font-size: 1.05rem;">Total: $<span id="totalOrdenTienda">0.00</span></div>
+                        <button class="btn-primary" id="btnGuardarOrdenTienda" type="button" style="width: 100%; margin-top: 1rem;">Guardar orden y generar ticket</button>
+                    </div>
+                </div>
+
+                <div class="card" style="padding: 1rem; margin-top: 1rem; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.08);">
+                    <h3 style="margin-bottom: 0.75rem;">Órdenes recientes en tienda</h3>
+                    <div id="listaOrdenesTienda" class="pedidos-list"></div>
+                </div>
+
+                <div class="card" style="padding: 1rem; margin-top: 1rem; background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.08);">
+                    <h3 style="margin-bottom: 0.75rem;"><i class="fas fa-history"></i> Historial de Cajas</h3>
+                    <div id="historialCajas"></div>
+                </div>
+            </section>
+
+            <!-- Pedidos Section -->
+            <section id="pedidos" class="admin-section">
+                <h2>Gestión de Pedidos</h2>
+                <div class="admin-filters">
+                    <input type="text" id="buscarPedido" placeholder="Buscar por nombre...">
+                    <select id="filtroEstado">
+                        <option value="">Todos los estados</option>
+                        <option value="pendiente">Pendiente</option>
+                        <option value="visto">Visto</option>
+                        <option value="preparacion">En Preparación</option>
+                        <option value="camino">En Camino</option>
+                        <option value="completado">Completado</option>
+                    </select>
+                </div>
+                <div id="listaPedidos" class="pedidos-list"></div>
+            </section>
+
+            <!-- Menús Section -->
+            <section id="menus" class="admin-section">
+                <div class="admin-header">
+                    <h2>Gestión de Menús</h2>
+                    <button class="btn-primary" id="btnAgregarMenu">+ Agregar Menú</button>
+                </div>
+                
+                <div id="formMenuContainer" style="display: none;">
+                    <form id="formMenu">
+                        <div class="form-group">
+                            <label>Nombre del Menú</label>
+                            <input type="text" id="nombreMenu" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Tipo</label>
+                            <select id="tipoMenu" required>
+                                <option value="">Selecciona tipo</option>
+                                <option value="imagen">Imagen</option>
+                                <option value="pdf">PDF</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="imagenMenuGroup" style="display: none;">
+                            <label>Imagen</label>
+                            <input type="file" id="imagenMenu" accept="image/*">
+                        </div>
+                        <div class="form-group" id="enlaceMenuGroup" style="display: none;">
+                            <label>Archivo PDF</label>
+                            <input type="file" id="archivoMenuPdf" accept=".pdf">
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary">Guardar Menú</button>
+                            <button type="button" class="btn-danger" id="btnCancelarMenu">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="listaMenus" class="menus-admin-list"></div>
+            </section>
+
+            <!-- Galería Section -->
+            <section id="galeria" class="admin-section">
+                <div class="admin-header">
+                    <h2>Gestión de Galería</h2>
+                    <button class="btn-primary" id="btnAgregarGaleria">+ Agregar Imagen</button>
+                </div>
+                
+                <div id="formGaleriaContainer" style="display: none;">
+                    <form id="formGaleria">
+                        <div class="form-group">
+                            <label>Título de la Imagen</label>
+                            <input type="text" id="tituloGaleria" placeholder="Opcional">
+                        </div>
+                        <div class="form-group">
+                            <label>Imagen</label>
+                            <input type="file" id="archivoGaleria" accept="image/*" required>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary">Subir Imagen</button>
+                            <button type="button" class="btn-danger" id="btnCancelarGaleria">Cancelar</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="listaGaleria" class="galeria-admin-list"></div>
+            </section>
+
+            <!-- Configuración Section -->
+            <section id="configuracion" class="admin-section">
+                <h2>Configuración de la Tienda</h2>
+                
+                <div class="config-card">
+                    <h3>Logo de la Tienda</h3>
+                    <div id="configLogoContainer">
+                        <img id="previewLogo" src="" alt="Logo" style="max-width: 200px; margin: 1rem 0;">
+                        <div class="form-group">
+                            <label>Cambiar Logo</label>
+                            <input type="file" id="archivoLogo" accept="image/*">
+                            <button type="button" class="btn-primary" id="btnGuardarLogo">Guardar Logo</button>
+                            <button type="button" class="btn-danger" id="btnEliminarLogo">Eliminar Logo</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="config-card">
+                    <h3>Imagen Principal (Hero)</h3>
+                    <div id="configImagenContainer">
+                        <img id="previewImagenPrincipal" src="" alt="Imagen Principal" style="max-width: 300px; margin: 1rem 0;">
+                        <div class="form-group">
+                            <label>Cambiar Imagen</label>
+                            <input type="file" id="archivoImagenPrincipal" accept="image/*">
+                            <button type="button" class="btn-primary" id="btnGuardarImagenPrincipal">Guardar Imagen</button>
+                            <button type="button" class="btn-danger" id="btnEliminarImagenPrincipal">Eliminar Imagen</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Comentarios Section -->
+            <section id="comentarios" class="admin-section">
+                <h2>Moderación de Comentarios</h2>
+                <div id="listaComentarios" class="comentarios-list"></div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal para editar producto -->
+    <div id="editProductoModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Editar Producto</h2>
+            <form id="formEditarProducto">
+                <div class="form-group">
+                    <label>Nombre del Producto</label>
+                    <input type="text" id="editNombreProducto" required>
+                </div>
+                <div class="form-group">
+                    <label>Categoría</label>
+                    <select id="editCategoriaProducto" required>
+                        <option value="comidas">Comidas</option>
+                        <option value="bebidas">Bebidas</option>
+                        <option value="postres">Postres</option>
+                        <option value="licuados">Licuados</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Precio ($)</label>
+                    <input type="number" id="editPrecioProducto" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label>Ingredientes</label>
+                    <textarea id="editIngredientesProducto" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Stock</label>
+                    <input type="number" id="editStockProducto" required>
+                </div>
+                <div class="form-group">
+                    <label>Imagen</label>
+                    <input type="file" id="editImagenProducto" accept="image/*">
+                    <small>Selecciona una nueva imagen para reemplazar la actual, se guardará en Firestore como base64.</small>
+                </div>
+                <button type="submit" class="btn-primary">Guardar Cambios</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Mapa de Entrega -->
+    <div id="mapaAdminModal" class="modal" style="z-index: 2000;">
+        <div class="modal-content" style="max-width: 95%; max-height: 95vh; width: 95%;">
+            <span class="close" onclick="cerrarMapaAdmin()">&times;</span>
+            <h2>Ruta de Entrega</h2>
+            <div id="mapAdminContainer" style="height: 70vh; border-radius: 8px; overflow: hidden;"></div>
+            <div id="mapaAdminInfo" style="margin-top: 1rem; padding: 1rem; background-color: #f5f5f5; border-radius: 8px;"></div>
+        </div>
+    </div>
+
+    <!-- Modal Abrir Caja -->
+    <div id="modalAbrirCaja" class="modal">
+        <div class="modal-content" style="max-width:500px;">
+            <span class="close" onclick="document.getElementById('modalAbrirCaja').classList.remove('show')">&times;</span>
+            <h2><i class="fas fa-cash-register"></i> Abrir Caja</h2>
+            <div class="form-group">
+                <label>Nombre del cajero <span style="color:red;">*</span></label>
+                <input type="text" id="cajaNombre" placeholder="Ej. María López">
+            </div>
+            <div class="form-group">
+                <label>Fecha de apertura <span style="color:red;">*</span></label>
+                <input type="date" id="cajaFecha">
+            </div>
+            <div class="form-group">
+                <label>Hora de apertura <span style="color:red;">*</span></label>
+                <input type="time" id="cajaHoraApertura">
+            </div>
+            <div class="form-group">
+                <label>Dinero inicial en caja ($) <span style="color:red;">*</span></label>
+                <input type="number" id="cajaDineroInicial" placeholder="0.00" min="0" step="0.01">
+            </div>
+            <div class="form-group">
+                <label>Detalles adicionales <span style="color:#999; font-size:0.85rem;">(opcional)</span></label>
+                <textarea id="cajaDetalles" rows="3" placeholder="Notas adicionales sobre la apertura..."></textarea>
+            </div>
+            <div class="form-actions" style="display:flex; gap:0.75rem; margin-top:1rem;">
+                <button type="button" class="btn-primary" id="btnConfirmarAbrirCaja"><i class="fas fa-lock-open"></i> Abrir Caja</button>
+                <button type="button" class="btn-danger" id="btnCancelarAbrirCaja">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Cerrar Caja -->
+    <div id="modalCerrarCaja" class="modal">
+        <div class="modal-content" style="max-width:500px;">
+            <span class="close" onclick="document.getElementById('modalCerrarCaja').classList.remove('show')">&times;</span>
+            <h2><i class="fas fa-lock"></i> Cerrar Caja</h2>
+            <div id="infoCajaActual"></div>
+            <div class="form-group">
+                <label>Hora de cierre <span style="color:red;">*</span></label>
+                <input type="time" id="cajaHoraCierre">
+            </div>
+            <div class="form-group">
+                <label>Dinero en caja al cierre ($) <span style="color:red;">*</span></label>
+                <input type="number" id="cajaDineroFinal" placeholder="0.00" min="0" step="0.01">
+            </div>
+            <div class="form-group">
+                <label>Egresos del turno ($) <span style="color:#999; font-size:0.85rem;">(gastos, retiros, etc.)</span></label>
+                <input type="number" id="cajaEgresos" placeholder="0.00" min="0" step="0.01" value="0">
+            </div>
+            <div class="form-group">
+                <label>Notas de cierre <span style="color:#999; font-size:0.85rem;">(opcional)</span></label>
+                <textarea id="cajaNotasCierre" rows="3" placeholder="Observaciones del cierre..."></textarea>
+            </div>
+            <div class="form-actions" style="display:flex; gap:0.75rem; margin-top:1rem;">
+                <button type="button" class="btn-danger" id="btnConfirmarCerrarCaja"><i class="fas fa-lock"></i> Cerrar Caja</button>
+                <button type="button" class="btn-secondary" id="btnCancelarCerrarCaja">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Reporte de Caja -->
+    <div id="modalReporteCaja" class="modal">
+        <div class="modal-content" style="max-width:750px;">
+            <span class="close" onclick="document.getElementById('modalReporteCaja').classList.remove('show')">&times;</span>
+            <h2><i class="fas fa-chart-bar"></i> Reporte de Caja</h2>
+            <div style="margin-bottom:0.75rem;">
+                <strong id="reporteCajaNombre"></strong>
+                <span style="color:#5f6368; margin-left:0.75rem;">Período: <span id="reporteCajaPeriodo"></span></span>
+            </div>
+
+            <!-- Métricas resumen -->
+            <div class="reporte-metricas">
+                <div class="reporte-metrica">
+                    <label>Dinero Inicial</label>
+                    <span id="reporteDineroInicial">$0.00</span>
+                </div>
+                <div class="reporte-metrica">
+                    <label>Total Ventas</label>
+                    <span id="reporteTotalVentas">$0.00</span>
+                </div>
+                <div class="reporte-metrica">
+                    <label>Ventas en Efectivo</label>
+                    <span id="reporteVentasEfectivo">$0.00</span>
+                </div>
+                <div class="reporte-metrica">
+                    <label>Ventas por Transferencia</label>
+                    <span id="reporteVentasTransferencia">$0.00</span>
+                </div>
+                <div class="reporte-metrica">
+                    <label>Ventas por Tarjeta</label>
+                    <span id="reporteVentasTarjeta">$0.00</span>
+                </div>
+                <div class="reporte-metrica">
+                    <label>Ventas Pendientes</label>
+                    <span id="reporteVentasPendientes">$0.00</span>
+                </div>
+                <div class="reporte-metrica">
+                    <label>Ingresos Caja Electrónica</label>
+                    <span id="reporteIngresosElectronicos">$0.00</span>
+                </div>
+                <div class="reporte-metrica">
+                    <label>Ingresos Caja Física</label>
+                    <span id="reporteIngresosTotales">$0.00</span>
+                </div>
+                <div class="reporte-metrica">
+                    <label>Ingresos Digitales</label>
+                    <span id="reporteIngresosDigitales">$0.00</span>
+                </div>
+                <div class="reporte-metrica egreso">
+                    <label>Egresos</label>
+                    <span id="reporteEgresos">$0.00</span>
+                </div>
+                <div class="reporte-metrica balance">
+                    <label>Dinero Final Real</label>
+                    <span id="reporteDineroFinal">$0.00</span>
+                </div>
+                <div class="reporte-metrica balance">
+                    <label>Balance (Ing. &minus; Egr.)</label>
+                    <span id="reporteBalance">$0.00</span>
+                </div>
+                <div class="reporte-metrica diferencia">
+                    <label>Dinero faltante</label>
+                    <span id="reporteFaltanteCaja">$0.00</span>
+                </div>
+                <div class="reporte-metrica diferencia">
+                    <label>Dinero sobrante</label>
+                    <span id="reporteSobranteCaja">$0.00</span>
+                </div>
+            </div>
+
+            <div class="reporte-bloque">
+                <h4><i class="fas fa-shopping-cart"></i> Total de órdenes: <span id="reporteTotalOrdenes">0</span></h4>
+            </div>
+
+            <!-- Productos vendidos -->
+            <div class="reporte-bloque">
+                <h4><i class="fas fa-utensils"></i> Productos vendidos</h4>
+                <div style="overflow-x:auto;">
+                    <table class="reporte-tabla">
+                        <thead>
+                            <tr>
+                                <th>Producto</th>
+                                <th style="text-align:center;">Cantidad</th>
+                                <th style="text-align:right;">Precio unit.</th>
+                                <th style="text-align:right;">Total vendido</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reporteProductosTabla"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Órdenes del período -->
+            <div class="reporte-bloque">
+                <h4><i class="fas fa-list"></i> Órdenes del período</h4>
+                <div style="overflow-x:auto;">
+                    <table class="reporte-tabla">
+                        <thead>
+                            <tr>
+                                <th>Cliente</th>
+                                <th>Mesa</th>
+                                <th style="text-align:center;">Hora</th>
+                                <th style="text-align:right;">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="reporteOrdenesTabla"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Notas -->
+            <div class="reporte-bloque">
+                <h4><i class="fas fa-sticky-note"></i> Notas de cierre</h4>
+                <p id="reporteNotasCierre" style="color:#5f6368; font-style:italic; margin:0;"></p>
+            </div>
+
+            <div style="display:flex; gap:0.75rem; margin-top:1rem; flex-wrap:wrap;">
+                <button type="button" class="btn-primary" onclick="imprimirReporteCaja()"><i class="fas fa-print"></i> Imprimir reporte</button>
+                <button type="button" class="btn-secondary" id="btnCerrarReporteCaja">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Vista previa de ticket (móvil) -->
+    <div id="modalTicketPreview" class="modal ticket-preview-modal">
+        <div class="modal-content ticket-preview-content">
+            <span class="close" onclick="cerrarPreviewTicket()">&times;</span>
+            <div class="ticket-preview-header">
+                <h3 style="margin:0;">Vista previa del ticket</h3>
+                <div style="display:flex; gap:0.5rem; align-items:center;">
+                    <button id="btnOpenTicketTab" type="button" class="btn-secondary" style="display:none;">Abrir en pestaña</button>
+                    <button id="btnPrintTicketModal" type="button" class="btn-primary" style="display:none;"><i class="fas fa-print"></i> Imprimir</button>
+                    <button type="button" class="btn-secondary" onclick="cerrarPreviewTicket()">Cerrar</button>
+                </div>
+            </div>
+            <div id="ticketPreviewBody" class="ticket-preview-body"></div>
+        </div>
+    </div>
+
+    <!-- Modal Reporte de Ventas -->
+    <div id="modalReporteVentas" class="modal">
+        <div class="modal-content" style="max-width:820px;">
+            <span class="close" onclick="document.getElementById('modalReporteVentas').classList.remove('show')">&times;</span>
+            <h2><i class="fas fa-chart-bar"></i> Reporte de Ventas</h2>
+
+            <!-- Tabs de período -->
+            <div class="reporte-tabs">
+                <button class="reporte-tab active" type="button" onclick="generarReporteVentas('dia')">Hoy</button>
+                <button class="reporte-tab" type="button" onclick="generarReporteVentas('semana')">Esta Semana</button>
+                <button class="reporte-tab" type="button" onclick="generarReporteVentas('mes')">Este Mes</button>
+            </div>
+
+            <!-- Contenido dinámico -->
+            <div id="reporteVentasContenido"></div>
+
+            <div style="display:flex; gap:0.75rem; margin-top:1.25rem; flex-wrap:wrap;">
+                <button type="button" class="btn-primary" onclick="imprimirReporteVentas()"><i class="fas fa-print"></i> Imprimir reporte</button>
+                <button type="button" class="btn-secondary" id="btnCerrarReporteVentas">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <!-- PDF.js para convertir PDFs a imágenes -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+    <script type="module" src="js/admin-main.js"></script>
+    <script type="module" src="js/admin-dashboard.js"></script>
+    <script type="module" src="js/admin-bulk-upload.js"></script>
+    <script type="module" src="js/mapas-admin-mejorado.js"></script>
+    <script>
+        const adminHamburger = document.getElementById('adminHamburger');
+        const adminSidebar = document.querySelector('.admin-sidebar');
+        if (adminHamburger && adminSidebar) {
+            adminHamburger.addEventListener('click', (event) => {
+                event.stopPropagation();
+                adminSidebar.classList.toggle('show');
+            });
+        }
+    </script>
+</body>
+</html>

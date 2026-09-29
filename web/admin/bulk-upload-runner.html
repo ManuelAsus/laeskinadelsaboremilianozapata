@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Carga masiva de productos</title>
+</head>
+<body>
+  <h2>Cargando productos...</h2>
+  <p>Esto puede tardar unos segundos.</p>
+  <script type="module">
+    import './js/admin-bulk-upload.js';
+
+    window.addEventListener('load', async () => {
+      try {
+        if (typeof window.bulkUploadProductos === 'function') {
+          await window.bulkUploadProductos();
+        } else {
+          document.body.innerHTML = '<p>No se encontró la función de carga.</p>';
+        }
+      } catch (error) {
+        document.body.innerHTML = '<p>Error: ' + error.message + '</p>';
+      }
+    });
+  </script>
+</body>
+</html>

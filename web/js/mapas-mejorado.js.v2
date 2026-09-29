@@ -1,0 +1,472 @@
+// ============================================
+// MAPAS MEJORADOS - INCLUYE REPARTIDOR
+// ============================================
+
+let mapaInstanciaCliente = null;
+let intervaloMonitoreoRepartidor = null;
+let marcadorRepartidor = null;
+let polylineRepartidor = null;
+let marcadorUsuario = null;
+
+// Función para geocodificar dirección usando Nominatim
+async function geocodificarDireccion(direccion) {
+    try {
+        // Intentar geocodificar la dirección completa
+        let urlCodificada = encodeURIComponent(direccion + ', Tabasco, México');
+        let response = await fetch(`https://nominatim.openstreetmap.org/search?q=${urlCodificada}&format=json&limit=1`);
+        let datos = await response.json();
+        
+        if (datos && datos.length > 0) {
+            const resultado = datos[0];
+            console.log('✅ Dirección geocodificada:', resultado);
+            return {
+                lat: parseFloat(resultado.lat),
+                lng: parseFloat(resultado.lon)
+            };
+        }
+        
+        // Si no encuentra, intentar solo con el municipio
+        console.warn('⚠️ No se encontró dirección exacta, buscando municipio...');
+        urlCodificada = encodeURIComponent('Emiliano Zapata, Tabasco');
+        response = await fetch(`https://nominatim.openstreetmap.org/search?q=${urlCodificada}&format=json&limit=1`);
+        datos = await response.json();
+        
+        if (datos && datos.length > 0) {
+            const resultado = datos[0];
+            console.log('✅ Ubicación por municipio:', resultado);
+            return {
+                lat: parseFloat(resultado.lat),
+                lng: parseFloat(resultado.lon)
+            };
+        }
+        
+    } catch (error) {
+        console.error('Error geocodificando:', error);
+    }
+    
+    // Fallback: usar coordenadas por defecto de Emiliano Zapata
+    console.warn('⚠️ Usando ubicación por defecto');
+    return {
+        lat: 17.6936260,
+        lng: -91.6397346
+    };
+}
+
+// Para el cliente: mostrar su ubicación + ubicación del repartidor
+window.mostrarMapaMejorado = function(direccionCliente, nombreCliente, lat = null, lng = null, pedidoId = null) {
+    const mapaModal = document.getElementById('mapaModal');
+    const mapContainer = document.getElementById('mapContainer');
+    const mapaInfo = document.getElementById('mapaInfo');
+    
+    // Destruir mapa anterior si existe
+    if (mapaInstanciaCliente) {
+        try {
+            // Detener monitoreo
+            if (intervaloMonitoreoRepartidor) {
+                clearInterval(intervaloMonitoreoRepartidor);
+                intervaloMonitoreoRepartidor = null;
+            }
+            mapaInstanciaCliente.off();
+            mapaInstanciaCliente.remove();
+            mapaInstanciaCliente = null;
+            marcadorRepartidor = null;
+            polylineRepartidor = null;
+            marcadorUsuario = null;
+        } catch (e) {
+            console.warn('Error removiendo mapa anterior:', e);
+        }
+    }
+    
+    // Limpiar contenedor
+    mapContainer.innerHTML = '';
+    
+    // Mostrar modal PRIMERO
+    window.abrirModal('mapaModal');
+    
+    // Convertir y validar coordenadas destino
+    const destLat = lat !== null && lat !== undefined ? parseFloat(lat) : null;
+    const destLng = lng !== null && lng !== undefined ? parseFloat(lng) : null;
+    
+    console.log('🗺️ Mapa abierto con datos:');
+    console.log('   - Dirección:', direccionCliente);
+    console.log('   - Nombre:', nombreCliente);
+    console.log('   - Lat/Lng:', destLat, destLng);
+    console.log('   - Pedido ID:', pedidoId);
+    
+    // Validar que tenemos coordenadas válidas
+    const coordenadasValidas = !isNaN(destLat) && !isNaN(destLng) && destLat !== null && destLng !== null;
+    
+    // ⭐ IMPORTANTE: INICIAR MONITOREO DEL REPARTIDOR INMEDIATAMENTE (antes de geolocalización)
+    if (pedidoId && coordenadasValidas) {
+        console.log('⭐ Iniciando monitoreo del repartidor INMEDIATAMENTE para:', pedidoId);
+        iniciarMonitoreoRepartidor(pedidoId, destLat, destLng, mapaInfo);
+    } else if (pedidoId) {
+        console.warn('⚠️ No se pueden iniciar monitoreo: coordenadas inválidas');
+        iniciarMonitoreoRepartidor(pedidoId, null, null, mapaInfo);
+    }
+    
+    // Mostrar botón inicial para solicitar permiso de ubicación
+    mapaInfo.innerHTML = `
+        <div style="text-align: center; padding: 2rem; background: #f8f9fa; border-radius: 8px;">
+            <p style="color: #2980b9; font-weight: bold; font-size: 1.1rem; margin-bottom: 1rem;">🗺️ Acceso a tu Ubicación</p>
+            <p style="margin: 1rem 0; color: #333;">Para ver el mapa con tu ubicación actual, necesitamos acceso a tu GPS.</p>
+            <button id="btnPermitirUbicacion" style="
+                padding: 12px 24px;
+                background: #3498db;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                font-size: 1rem;
+                cursor: pointer;
+                margin: 1rem 0;
+                font-weight: bold;
+                transition: background 0.3s;
+            " onmouseover="this.style.background='#2980b9'" onmouseout="this.style.background='#3498db'">
+                ✅ Permitir Acceso a mi Ubicación
+            </button>
+        </div>
+    `;
+    
+    // Función auxiliar para solicitar geolocalización
+    const solicitarGeolocalización = () => {
+        mapaInfo.innerHTML = `<p style="color: #2980b9; font-weight: bold;">🗺️ Obteniendo tu Ubicación...</p>`;
+        
+        try {
+            if (navigator.geolocation) {
+                const opcionesGeoloc = {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                };
+                
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const userLat = position.coords.latitude;
+                        const userLng = position.coords.longitude;
+                        const accuracy = position.coords.accuracy;
+                        
+                        console.log('✅ Ubicación obtenida:', userLat, userLng, 'Precisión:', accuracy);
+                        
+                        // CREAR MAPA
+                        const mapa = L.map('mapContainer', { preferCanvas: true }).setView([userLat, userLng], 16);
+                        mapaInstanciaCliente = mapa;
+                        
+                        console.log('✅ Mapa instancia asignada');
+                        
+                        // ⚡ VERIFICACIÓN INMEDIATA DE REPARTIDOR
+                        if (pedidoId && !marcadorRepartidor) {
+                            console.log('🔍 Buscando repartidor inmediatamente...');
+                            const misPedidosCheck = JSON.parse(localStorage.getItem('misPedidos')) || [];
+                            const pedidoCheck = misPedidosCheck.find(p => p.id === pedidoId);
+                            
+                            if (pedidoCheck && pedidoCheck.repartidorUbicacion && pedidoCheck.repartidorUbicacion.lat && pedidoCheck.repartidorUbicacion.lng) {
+                                const repLat = parseFloat(pedidoCheck.repartidorUbicacion.lat);
+                                const repLng = parseFloat(pedidoCheck.repartidorUbicacion.lng);
+                                
+                                if (!isNaN(repLat) && !isNaN(repLng)) {
+                                    try {
+                                        const greenIconUrl = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png';
+                                        const shadowUrl = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png';
+                                        
+                                        marcadorRepartidor = L.marker([repLat, repLng], {
+                                            icon: L.icon({
+                                                iconUrl: greenIconUrl,
+                                                shadowUrl: shadowUrl,
+                                                iconSize: [25, 41],
+                                                iconAnchor: [12, 41],
+                                                popupAnchor: [1, -34],
+                                                shadowSize: [41, 41]
+                                            })
+                                        }).addTo(mapa).bindPopup('<strong>🚗 Repartidor en camino</strong>');
+                                        
+                                        console.log('✅✅✅ MARCADOR CREADO INMEDIATAMENTE CON ÉXITO');
+                                        
+                                        // Crear polyline
+                                        if (destLat !== null && destLng !== null && !isNaN(destLat) && !isNaN(destLng)) {
+                                            polylineRepartidor = L.polyline([[destLat, destLng], [repLat, repLng]], {
+                                                color: '#0066ff',
+                                                weight: 2,
+                                                opacity: 0.7,
+                                                dashArray: '5, 5'
+                                            }).addTo(mapa);
+                                        }
+                                    } catch (e) {
+                                        console.error('❌ Error creando marcador inmediatamente:', e);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Cargar mapa base
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            maxZoom: 19,
+                            attribution: '© OpenStreetMap'
+                        }).addTo(mapa);
+                        
+                        mapa.invalidateSize(false);
+                        
+                        const marcadores = [];
+                        
+                        // Marcador azul - Usuario
+                        marcadorUsuario = L.marker([userLat, userLng], {
+                            icon: L.icon({
+                                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
+                                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                                iconSize: [25, 41],
+                                iconAnchor: [12, 41],
+                                popupAnchor: [1, -34],
+                                shadowSize: [41, 41]
+                            })
+                        }).addTo(mapa).bindPopup('Tu ubicación actual');
+                        marcadores.push(marcadorUsuario);
+                        
+                        let infoHtml = `
+                            <p><strong style="color: #3498db;">Tu ubicación actual</strong></p>
+                            <p>Coordenadas: ${userLat.toFixed(4)}, ${userLng.toFixed(4)}</p>
+                            <p style="font-size: 0.85rem; color: #666;">Precisión: ${accuracy.toFixed(0)}m</p>
+                        `;
+                        
+                        // Marcador rojo - Destino
+                        if (destLat !== null && destLng !== null) {
+                            const marcadorDestino = L.marker([destLat, destLng], {
+                                icon: L.icon({
+                                    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+                                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                                    iconSize: [25, 41],
+                                    iconAnchor: [12, 41],
+                                    popupAnchor: [1, -34],
+                                    shadowSize: [41, 41]
+                                })
+                            }).addTo(mapa).bindPopup(`${nombreCliente}<br>${direccionCliente}`);
+                            marcadores.push(marcadorDestino);
+                            
+                            // Línea a destino
+                            L.polyline([[userLat, userLng], [destLat, destLng]], {
+                                color: '#dbb42a',
+                                weight: 3,
+                                opacity: 0.8
+                            }).addTo(mapa);
+                            
+                            const distance = Math.sqrt(
+                                Math.pow(destLat - userLat, 2) + Math.pow(destLng - userLng, 2)
+                            ) * 111;
+                            
+                            infoHtml += `
+                                <hr>
+                                <p><strong style="color: #e74c3c;">Destino de entrega</strong></p>
+                                <p>${nombreCliente}</p>
+                                <p>Dirección: ${direccionCliente}</p>
+                                <p>Coordenadas: ${destLat.toFixed(4)}, ${destLng.toFixed(4)}</p>
+                                <p>Distancia: ${distance.toFixed(2)} km</p>
+                            `;
+                        }
+                        
+                        // Enfocar en todos los marcadores
+                        if (marcadores.length > 1) {
+                            const group = new L.featureGroup(marcadores);
+                            try {
+                                mapa.fitBounds(group.getBounds().pad(0.15), { maxZoom: 15, animate: true });
+                            } catch (e) {
+                                console.error('Error en fitBounds:', e);
+                            }
+                        }
+                        
+                        infoHtml += `<p style="font-size: 0.9rem; color: #666; margin-top: 1rem;">🔵 Azul=Tu ubicación | 🔴 Rojo=Destino | 🟢 Verde=Repartidor</p>`;
+                        mapaInfo.innerHTML = infoHtml;
+                    },
+                    (error) => {
+                        console.error('Error geolocalización:', error);
+                        
+                        // Fallback con Nominatim
+                        if (destLat !== null && destLng !== null) {
+                            const mapa = L.map('mapContainer', { preferCanvas: true }).setView([destLat, destLng], 16);
+                            mapaInstanciaCliente = mapa;
+                            
+                            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                                maxZoom: 19,
+                                attribution: '© OpenStreetMap'
+                            }).addTo(mapa);
+                            
+                            mapa.invalidateSize(false);
+                            
+                            const marcadorDestino = L.marker([destLat, destLng], {
+                                icon: L.icon({
+                                    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+                                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                                    iconSize: [25, 41],
+                                    iconAnchor: [12, 41],
+                                    popupAnchor: [1, -34],
+                                    shadowSize: [41, 41]
+                                })
+                            }).addTo(mapa).bindPopup(`${nombreCliente}<br>${direccionCliente}`);
+                            
+                            let infoFallback = `
+                                <p>📍 Tu dirección de entrega</p>
+                                <p><strong>${nombreCliente}</strong></p>
+                                <p>Dirección: ${direccionCliente}</p>
+                                <p style="color: #666; font-size: 0.85rem;">⚠️ GPS no disponible</p>
+                            `;
+                            
+                            infoFallback += `<p style="font-size: 0.9rem; color: #666; margin-top: 1rem;">🔴 Rojo=Destino | 🟢 Verde=Repartidor</p>`;
+                            mapaInfo.innerHTML = infoFallback;
+                        }
+                    },
+                    opcionesGeoloc
+                );
+            }
+        } catch (error) {
+            console.error('Error en geolocalización:', error);
+            mapaInfo.innerHTML = `<p style="color: #e74c3c;">❌ Error al obtener ubicación</p>`;
+        }
+    };
+    
+    // Agregar listener al botón
+    setTimeout(() => {
+        const btnPermitir = document.getElementById('btnPermitirUbicacion');
+        if (btnPermitir) {
+            btnPermitir.addEventListener('click', solicitarGeolocalización);
+        }
+    }, 100);
+};
+
+// Monitorear cambios en tiempo real del repartidor
+function iniciarMonitoreoRepartidor(pedidoId, destLat, destLng, mapaInfo) {
+    console.log('🔍 Iniciando monitoreo de repartidor:', pedidoId);
+    
+    // Detener monitoreo anterior
+    if (intervaloMonitoreoRepartidor) {
+        clearInterval(intervaloMonitoreoRepartidor);
+    }
+    
+    let contadorActualizaciones = 0;
+    let intentosBusqueda = 0;
+    
+    // Monitorear cada 200ms
+    intervaloMonitoreoRepartidor = setInterval(() => {
+        try {
+            const misPedidos = JSON.parse(localStorage.getItem('misPedidos')) || [];
+            const pedido = misPedidos.find(p => p.id === pedidoId);
+            
+            if (!pedido || !pedido.repartidorUbicacion || !pedido.repartidorUbicacion.lat || !pedido.repartidorUbicacion.lng) {
+                intentosBusqueda++;
+                if (intentosBusqueda % 50 === 0) {
+                    console.log(`⏳ Esperando repartidor... (${(intentosBusqueda * 200 / 1000).toFixed(1)}s)`);
+                }
+                return;
+            }
+            
+            intentosBusqueda = 0;
+            const repLat = parseFloat(pedido.repartidorUbicacion.lat);
+            const repLng = parseFloat(pedido.repartidorUbicacion.lng);
+            
+            if (isNaN(repLat) || isNaN(repLng)) {
+                console.warn('⚠️ Coordenadas inválidas:', pedido.repartidorUbicacion);
+                return;
+            }
+            
+            contadorActualizaciones++;
+            console.log(`📡 Repartidor: (${repLat.toFixed(4)}, ${repLng.toFixed(4)})`);
+            
+            // Validar mapa
+            let mapaValido = false;
+            if (mapaInstanciaCliente && typeof mapaInstanciaCliente.getContainer === 'function') {
+                try {
+                    const container = mapaInstanciaCliente.getContainer();
+                    if (container && container.offsetParent !== null) {
+                        mapaValido = true;
+                    }
+                } catch (e) {
+                    console.warn('⚠️ Mapa container inválido:', e);
+                }
+            }
+            
+            // Crear marcador si no existe
+            if (mapaValido && !marcadorRepartidor) {
+                console.log('✅ CREANDO marcador del repartidor');
+                
+                const greenIconUrl = 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png';
+                const shadowUrl = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png';
+                
+                try {
+                    marcadorRepartidor = L.marker([repLat, repLng], {
+                        icon: L.icon({
+                            iconUrl: greenIconUrl,
+                            shadowUrl: shadowUrl,
+                            iconSize: [25, 41],
+                            iconAnchor: [12, 41],
+                            popupAnchor: [1, -34],
+                            shadowSize: [41, 41]
+                        })
+                    }).addTo(mapaInstanciaCliente)
+                      .bindPopup(`<strong>🚗 Repartidor en camino</strong>`);
+                    
+                    console.log('✅✅✅ MARCADOR CREADO CON ÉXITO');
+                    
+                    // Crear polyline
+                    if (destLat !== null && destLng !== null && !isNaN(destLat) && !isNaN(destLng)) {
+                        polylineRepartidor = L.polyline([[destLat, destLng], [repLat, repLng]], {
+                            color: '#0066ff',
+                            weight: 2,
+                            opacity: 0.7,
+                            dashArray: '5, 5'
+                        }).addTo(mapaInstanciaCliente);
+                    }
+                } catch (e) {
+                    console.error('❌ Error creando marcador:', e);
+                    marcadorRepartidor = null;
+                }
+            } else if (!mapaValido && !marcadorRepartidor) {
+                console.log('⏳ Repartidor en storage pero mapa no está listo...');
+            }
+            
+            // Actualizar posición del marcador
+            if (mapaValido && marcadorRepartidor) {
+                const posAnterior = marcadorRepartidor.getLatLng();
+                const cambio = Math.abs(posAnterior.lat - repLat) > 0.0001 || Math.abs(posAnterior.lng - repLng) > 0.0001;
+                
+                if (cambio) {
+                    console.log('📍 Actualizando posición del repartidor');
+                    marcadorRepartidor.setLatLng([repLat, repLng]);
+                    
+                    // Actualizar polyline
+                    if (polylineRepartidor && destLat !== null && destLng !== null) {
+                        polylineRepartidor.setLatLngs([[destLat, destLng], [repLat, repLng]]);
+                    }
+                    
+                    // Actualizar panel de información
+                    if (mapaInfo && destLat !== null && destLng !== null) {
+                        const distance = Math.sqrt(
+                            Math.pow(destLat - repLat, 2) + Math.pow(destLng - repLng, 2)
+                        ) * 111;
+                        
+                        let infoActualizado = `
+                            <p><strong style="color: #27ae60;">🚗 Repartidor en camino</strong></p>
+                            <p>📍 Ubicación: ${repLat.toFixed(4)}, ${repLng.toFixed(4)}</p>
+                            <p>📏 Distancia: ${distance.toFixed(2)} km</p>
+                            <p style="font-size: 0.85rem; color: #666;">✅ En tiempo real</p>
+                        `;
+                        
+                        const htmlActual = mapaInfo.innerHTML;
+                        const indexRepartidor = htmlActual.indexOf('<p><strong style="color: #27ae60;">');
+                        
+                        if (indexRepartidor > -1) {
+                            const indexFin = htmlActual.indexOf('</p>', indexRepartidor + 150);
+                            const parteAntes = htmlActual.substring(0, indexRepartidor);
+                            const parteDespues = indexFin > -1 ? htmlActual.substring(indexFin + 4) : '';
+                            mapaInfo.innerHTML = parteAntes + infoActualizado + parteDespues;
+                        } else {
+                            if (!htmlActual.includes('🚗')) {
+                                mapaInfo.innerHTML += '<hr>' + infoActualizado;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('❌ Error en monitoreo:', error);
+        }
+    }, 200);
+}
+
+// Alias para compatibilidad
+window.mostrarMapaMejoradoAdmin = window.mostrarMapaAdmin;

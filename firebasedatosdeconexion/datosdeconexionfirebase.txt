@@ -1,0 +1,23 @@
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-analytics.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+    apiKey: "AIzaSyCqIlpYO725f2tfXHz3BB06oHO8IcnMO_c",
+    authDomain: "laesquinarestaurante.firebaseapp.com",
+    projectId: "laesquinarestaurante",
+    storageBucket: "laesquinarestaurante.firebasestorage.app",
+    messagingSenderId: "335066879706",
+    appId: "1:335066879706:web:e74dcd1edd0ff8064837e3",
+    measurementId: "G-K77YDKRNV3"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+</script>
